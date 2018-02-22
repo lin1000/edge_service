@@ -1,0 +1,14 @@
+version: '3'
+services:
+  nginx:
+    build: './nginx-lua-edge-service'
+    ports:
+     - "10080:80"
+    volumes:
+     - ./nginx-lua-edge-service/data:/data
+    links:
+      - redis
+  redis:
+    build: './redis-edge-service'
+    ports:
+     - "16379:6379"

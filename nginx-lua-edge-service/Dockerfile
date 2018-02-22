@@ -1,0 +1,202 @@
+FROM ubuntu:16.04
+LABEL description="The image will build nginx from source and enable lua and redis functions."
+RUN CPUCOUNT=$(cat /proc/cpuinfo | grep '^processor.*:' | wc -l)
+
+#build nginx from source
+## apt-get install common libraries
+RUN apt-get update -y && \
+    apt-get install -y build-essential wget curl python2.7 gnupg procps  libffi-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*    
+
+# Since we want extra depencency : LUA
+# Prepare LUA in the following sections
+
+# Prepare LUA section : lua's dependency  libreadline-dev
+RUN apt-get update -y && \
+    apt-get install -y libreadline-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*  
+
+## Prepare LUA section : lua source code 
+## Prepare LUA section : compile lua
+ENV LUA_VERSION 5.3.4
+RUN cd root && \
+    curl -R -O http://www.lua.org/ftp/lua-${LUA_VERSION}.tar.gz && \
+    tar zxf lua-${LUA_VERSION}.tar.gz && \
+    cd lua-${LUA_VERSION} && \
+    make linux && \
+    ln -s /root/lua-${LUA_VERSION}/src/lua /usr/bin/lua
+
+## Prepare LUAJIT section : download extra LuaJIT
+## Prepare LUAJIT section : compile LuaJIT
+ENV LUAJIT_VERSION 2.0.5
+ENV LUAJIT_INCLUDE_VERSION 2.0
+RUN cd root && \
+    wget http://luajit.org/download/LuaJIT-${LUAJIT_VERSION}.tar.gz && \
+    tar zxvf LuaJIT-${LUAJIT_VERSION}.tar.gz && \
+    cd LuaJIT-${LUAJIT_VERSION} && \
+    make PREFIX=/usr/local && \
+    make install PREFIX=/usr/local && \
+    rm -f ../LuaJIT-${LUAJIT_VERSION}.tar.gz
+
+ENV LUAJIT_LIB=/usr/local/lib
+ENV LUAJIT_INC=/usr/local/include/luajit-${LUAJIT_INCLUDE_VERSION}
+    
+
+## Prepare redis section : download lua redis library from resty
+RUN cd root && \
+    wget https://raw.githubusercontent.com/openresty/lua-resty-redis/master/lib/resty/redis.lua -O redis.lua && \
+    mkdir -p /root/lua/resty && \
+    mv redis.lua /root/lua/resty 
+
+# Build nginx from source
+
+## Prevent linking to dynamical library error when compiling dependency from source
+ENV CFLAGS="$CFLAGS -fPIC"
+
+# Skipped : because nginx will compile the zlib by with-zlib
+# RUN cd root && \
+#     cd zlib-1.2.11 && \
+#     ./configure --prefix=/usr && \
+#     make -j${CPUCOUNT}  && \
+#     make install
+
+# Skipped : because nginx will compile the pcre by with-pcre
+# RUN cd root && \
+#     cd pcre-8.41 && \
+#     ./configure --prefix=/usr                     \
+#                 --docdir=/usr/share/doc/pcre-8.41 \
+#                 --enable-unicode-properties       \
+#                 --enable-pcre16                   \
+#                 --enable-pcre32                   \
+#                 --enable-pcregrep-libz            \
+#                 #--enable-pcregrep-libbz2          \
+#                 #--enable-pcretest-libreadline     \
+#                 #--disable-static               && \
+#     CFLAGS="$CFLAGS -fPIC" make -j${CPUCOUNT}  && \
+#     make install
+
+# Skipped : because nginx will compile the openssl by with-openssl
+# RUN cd root && \
+#     cd openssl-1.1.0f && \
+#     ./config shared --prefix=/usr && \
+#     make -j${CPUCOUNT} && \
+#     make install
+
+## By default, both shared and static libraries are built. You can change this
+## by adding one of these options to the "configure" command:
+## --disable-shared
+## --disable-static
+## action : remove --disable-shared and --disable-static in Makefile
+## action : add -fPIC in CFLAGS for pcre zlib
+## download and extract nginx and its dependencies pcre, zlib, openssl 
+## Prepare redis section : download redis2-nginx-module
+## Prepare LUA section : download extra ngnix modules ngx_devel_kit
+# Since we want to use lua to connect to redis
+# Prepare redis2-nginx-module
+ENV NGX_DEVEL_KIT_VERSION 0.3.1rc1
+ENV REDIS2_NGINX_VERSION 0.15rc1
+ENV LUA_NGINX_MODULE_VERSION 0.10.12rc2
+ENV ECHO_NGINX_MODULE_VERSION 0.61
+## then Create missing folders and make the nginx
+RUN cd root && \
+    wget https://nginx.org/download/nginx-1.13.1.tar.gz && \
+    wget https://ftp.pcre.org/pub/pcre/pcre-8.41.tar.gz && \
+    wget http://www.zlib.net/zlib-1.2.11.tar.gz && \
+    wget https://www.openssl.org/source/openssl-1.1.0f.tar.gz && \
+    wget https://github.com/simplresty/ngx_devel_kit/archive/v${NGX_DEVEL_KIT_VERSION}.tar.gz -O ngx_devel_kit-${NGX_DEVEL_KIT_VERSION}.tar.gz && \
+    wget https://github.com/openresty/redis2-nginx-module/archive/v${REDIS2_NGINX_VERSION}.tar.gz -O redis2-nginx-module-${REDIS2_NGINX_VERSION}.tar.gz && \    
+    wget https://github.com/openresty/lua-nginx-module/archive/v${LUA_NGINX_MODULE_VERSION}.tar.gz -O lua-nginx-module-${LUA_NGINX_MODULE_VERSION}.tar.gz && \    
+    wget https://github.com/openresty/echo-nginx-module/archive/v${ECHO_NGINX_MODULE_VERSION}.tar.gz -O echo-nginx-module-${ECHO_NGINX_MODULE_VERSION}.tar.gz && \
+    tar xzvf nginx-1.13.1.tar.gz && \
+    tar xzvf pcre-8.41.tar.gz && \
+    tar xzvf zlib-1.2.11.tar.gz && \
+    tar xzvf openssl-1.1.0f.tar.gz && \
+    tar zxvf ngx_devel_kit-${NGX_DEVEL_KIT_VERSION}.tar.gz && \    
+    tar zxvf redis2-nginx-module-$REDIS2_NGINX_VERSION.tar.gz && \
+    tar zxvf lua-nginx-module-${LUA_NGINX_MODULE_VERSION}.tar.gz && \
+    tar zxvf echo-nginx-module-${ECHO_NGINX_MODULE_VERSION}.tar.gz && \
+    cd nginx-1.13.1 && \
+    ./configure --prefix=/usr/share/nginx \
+                --sbin-path=/usr/sbin/nginx \
+                --modules-path=/usr/lib/nginx/modules \
+                --conf-path=/etc/nginx/nginx.conf \
+                --error-log-path=/var/log/nginx/error.log \
+                --http-log-path=/var/log/nginx/access.log \
+                --pid-path=/run/nginx.pid \
+                --lock-path=/var/lock/nginx.lock \
+                --user=www-data \
+                --group=www-data \
+                --build=Ubuntu \
+                --http-client-body-temp-path=/var/lib/nginx/body \
+                --http-fastcgi-temp-path=/var/lib/nginx/fastcgi \
+                --http-proxy-temp-path=/var/lib/nginx/proxy \
+                --http-scgi-temp-path=/var/lib/nginx/scgi \
+                --http-uwsgi-temp-path=/var/lib/nginx/uwsgi \
+                --with-openssl=../openssl-1.1.0f \
+                --with-openssl-opt=enable-ec_nistp_64_gcc_128 \
+                --with-openssl-opt=no-nextprotoneg \
+                --with-openssl-opt=no-weak-ssl-ciphers \
+                --with-openssl-opt=no-ssl3 \
+                --with-pcre=../pcre-8.41 \
+                --with-pcre-jit \
+                --with-zlib=../zlib-1.2.11 \
+                --with-compat \
+                --with-file-aio \
+                --with-threads \
+                --with-http_addition_module \
+                --with-http_auth_request_module \
+                --with-http_dav_module \
+                --with-http_flv_module \
+                --with-http_gunzip_module \
+                --with-http_gzip_static_module \
+                --with-http_mp4_module \
+                --with-http_random_index_module \
+                --with-http_realip_module \
+                --with-http_slice_module \
+                --with-http_ssl_module \
+                --with-http_sub_module \
+                --with-http_stub_status_module \
+                --with-http_v2_module \
+                --with-http_secure_link_module \
+                --with-mail \
+                --with-mail_ssl_module \
+                --with-stream \
+                --with-stream_realip_module \
+                --with-stream_ssl_module \
+                --with-stream_ssl_preread_module \
+                --with-debug \
+                --with-cc-opt='-g -O2 -fPIE -fstack-protector-strong -Wformat -Werror=format-security -Wdate-time -D_FORTIFY_SOURCE=2 -DNGX_LUA_USE_ASSERT -DNGX_LUA_ABORT_AT_PANIC' \
+                --with-ld-opt='-Wl,-Bsymbolic-functions -fPIE -pie -Wl,-z,relro -Wl,-z,now' \
+                --add-module='/root/lua-nginx-module-0.10.12rc2' \
+                --add-module='/root/ngx_devel_kit-0.3.1rc1' \
+                --add-module='/root/redis2-nginx-module-0.15rc1' \
+                --add-module='/root/echo-nginx-module-0.61' && \                
+                sed -i 's/CFLAGS="/CFLAGS="-fPIC /g' /root/nginx-1.13.1/objs/Makefile && \
+    mkdir -p /var/lib/nginx/body && \
+    mkdir -p /var/lib/nginx/fastcgi && \
+    mkdir -p /var/lib/nginx/proxy && \
+    mkdir -p /var/lib/nginx/scgi && \
+    mkdir -p /var/lib/nginx/uwsgi && \
+    mkdir -p /var/log/nginx/ && \
+    make -j2 && \
+    make install && \
+    ldconfig
+
+## copy and override custom nginx config (stub_status.conf) in order to enable amplify nginx metrics
+#COPY ./etc/nginx/nginx.conf /etc/nginx/
+
+## copy static contents to nginx root folder
+COPY ./static/index.html /usr/share/nginx/html/
+
+# VOLUME
+VOLUME /data
+
+#Available Services
+#CMD service amplify-agent start
+CMD /usr/sbin/nginx -c "/data/etc/nginx/nginx.conf" -g "daemon off;"
+#CMD tail -F -n0 /etc/hosts 
+
+
+
