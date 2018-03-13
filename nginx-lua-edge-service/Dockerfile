@@ -5,7 +5,7 @@ RUN CPUCOUNT=$(cat /proc/cpuinfo | grep '^processor.*:' | wc -l)
 #build nginx from source
 ## apt-get install common libraries
 RUN apt-get update -y && \
-    apt-get install -y build-essential wget curl python2.7 gnupg procps  libffi-dev && \
+    apt-get install -y build-essential wget curl python2.7 gnupg procps libffi-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*    
 
@@ -188,15 +188,60 @@ RUN cd root && \
 #COPY ./etc/nginx/nginx.conf /etc/nginx/
 
 ## copy static contents to nginx root folder
-COPY ./static/index.html /usr/share/nginx/html/
+#COPY ./static/index.html /usr/share/nginx/html/
+
+
+#INSTALL nginx-amplify (https://github.com/nginxinc/docker-nginx-amplify)
+RUN apt-get update -y && \
+    apt-get install -y wget curl python2.7 gnupg procps && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*    
+RUN cd root && \
+    curl -L -O https://github.com/nginxinc/nginx-amplify-agent/raw/master/packages/install.sh -v && \
+    sed -i 's/\${sudo_cmd} apt-key add - > \/dev\/null 2>\&1/ tac | tac | \${sudo_cmd} apt-key add - > \/dev\/null 2>\&1/g' install.sh
+RUN cd root && API_KEY='xxxxxxxxxx' sh ./install.sh -y && \
+    rm -f install.sh
+
+#INSTALL nginx-amplify : copy and override custom amplify agent conf
+COPY ./data/etc/amplify-agent/agent.conf /etc/amplify-agent/
+
+#copy and override custom nginx config (stub_status.conf) in order to enable amplify nginx metrics
+COPY ./data/etc/conf.d/stub_status.conf /etc/nginx/conf.d/
+
+#copy and override custom nginx config (stub_status.conf) in order to enable amplify nginx metrics
+COPY ./data/etc/nginx/nginx.conf /etc/nginx/
+
+#copy static contents to nginx root folder
+COPY ./data/static /usr/share/nginx/html
+
+#INSTALL supervisor
+RUN apt-get update -y && \
+    apt-get install -y supervisor && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*   
+
+#INSTALL supervisor : copy supervisord.conf
+COPY ./data/etc/supervisor/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # VOLUME
 VOLUME /data
 
+#EXPOSE
+EXPOSE 80
+
+#INSTALL nginx-amplify : copy and override custom amplify agent conf
+#/data//etc/amplify-agent/agent.conf /etc/amplify-agent/agent.conf
+#INSTALL nginx-amplify : copy and override custom nginx config (stub_status.conf) in order to enable amplify nginx metrics
+#/data/etc/conf.d/stub_status.conf /etc/nginx/conf.d/
+#NGINX CONFIG
+#/data/etc/nginx/nginx.conf /etc/nginx/
+
 #Available Services
 #CMD service amplify-agent start
-CMD /usr/sbin/nginx -c "/data/etc/nginx/nginx.conf" -g "daemon off;"
+#CMD /usr/sbin/nginx -c "/data/etc/nginx/nginx.conf" -g "daemon off;"
 #CMD tail -F -n0 /etc/hosts 
+
+CMD ["/usr/bin/supervisord"]
 
 
 
