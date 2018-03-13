@@ -3,6 +3,7 @@ kind: Deployment
 metadata:
   name: nginx-edge-service
 spec:
+  replicas: 5
   selector:
     matchLabels:
       app: nginx
@@ -13,6 +14,7 @@ spec:
       # generated from the deployment name
       labels:
         app: nginx
+        env: development
     spec:
       containers:
       - name: nginx
