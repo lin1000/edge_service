@@ -3,6 +3,7 @@ kind: Deployment
 metadata:
   name: nginx-edge-service
 spec:
+  type: NodePort
   selector:
     matchLabels:
       app: nginx
@@ -20,3 +21,5 @@ spec:
         image: 10.106.178.130:19999/nginx_lua_edge:latest
         ports:
         - containerPort: 80
+          targetPort: 8080  
+          nodePort: 30062        
