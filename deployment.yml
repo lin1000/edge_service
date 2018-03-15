@@ -20,3 +20,9 @@ spec:
         image: 10.106.178.130:19999/nginx_lua_edge:latest
         ports:
         - containerPort: 80 
+        volumeMounts:
+        - name: nginx-persistent-storage
+          mountPath: /data/
+      volumes:
+      - name: nginx-persistent-storage
+        hostPath: {"path":"/root/tony/edge_service/nginx-lua-edge-service/data"}    
