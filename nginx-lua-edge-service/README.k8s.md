@@ -4,13 +4,12 @@
 
 ```bash
 export NGINX_LUA_HOME="/root/tony/edge_service/nginx-lua-edge-service"
-docker build -t nginx_lua_edge .
-docker build -t bigdata/nginx_lua_edge .
+docker build -t 10.106.178.130:19999/nginx_lua_edge .
 docker rm -f nginx_lua_edge
 docker run --name nginx_lua_edge -d \
-    -v $NGINX_LUA_HOME/data/etc/nginx:/data/etc/nginx \
+    -v $NGINX_LUA_HOME/data/:/data/ \
     -p 10080:80 \
-    nginx_lua_edge 
+    10.106.178.130:19999/nginx_lua_edge 
 docker exec -it nginx_lua_edge /bin/bash
 docker logs nginx_lua_edge
 
@@ -42,3 +41,14 @@ docker run -d -p 5000:5000 --restart=always --name registry \
 -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/domain.crt \
 -e REGISTRY_HTTP_TLS_KEY=/certs/domain.key \
 registry:2.5     
+
+kubectl get pods
+```k8s exec <POD_NAME> -it /bin/bash
+kubectl logs nginx-edge-service-68d5679949-4jc5s
+kubectl exec nginx-edge-service-7cdf7755d6-4jc5s -i -t /bin/bash
+apt-get update && apt-get -y install net-tools
+/usr/sbin/nginx -c "/etc/nginx/nginx.conf" -t
+/usr/sbin/nginx -s reload -c "/etc/nginx/nginx.conf" -g "daemon off;"
+```
+
+加入volume並掛載正破後，解決nginx無法啟動的問題
